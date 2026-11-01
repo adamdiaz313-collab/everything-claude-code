@@ -1,59 +1,20 @@
-# Verification Command
+---
+description: Run project-specific validation and report evidence and untested areas.
+---
+# Verify
 
-Run comprehensive verification on current codebase state.
+Read this project's CLAUDE.md, contribution instructions, package scripts and CI configuration.
+Choose the existing build, lint, type and test commands appropriate to the changed behavior.
+For Python use the project's selected environment; do not install or upgrade dependencies to
+make a check pass without identifying the need. For a web app include relevant browser tests.
 
-## Instructions
+Run the selected checks and report each exact command, exit status, pass/fail/skip counts
+where available, and any blockers. Separate checks not run from successful checks.
+Do not claim a secret scan or coverage result unless actually measured. An AI review is not
+an automated security scanner. Inspect the diff and Git status for unintended changes.
 
-Execute verification in this exact order:
+`quick`: focused checks for the change. `full` or `pre-pr`: the project's required full checks.
+Project policy decides coverage thresholds; there is no universal 80% requirement.
+Do not commit, push, merge, or deploy as part of verification.
 
-1. **Build Check**
-   - Run the build command for this project
-   - If it fails, report errors and STOP
-
-2. **Type Check**
-   - Run TypeScript/type checker
-   - Report all errors with file:line
-
-3. **Lint Check**
-   - Run linter
-   - Report warnings and errors
-
-4. **Test Suite**
-   - Run all tests
-   - Report pass/fail count
-   - Report coverage percentage
-
-5. **Console.log Audit**
-   - Search for console.log in source files
-   - Report locations
-
-6. **Git Status**
-   - Show uncommitted changes
-   - Show files modified since last commit
-
-## Output
-
-Produce a concise verification report:
-
-```
-VERIFICATION: [PASS/FAIL]
-
-Build:    [OK/FAIL]
-Types:    [OK/X errors]
-Lint:     [OK/X issues]
-Tests:    [X/Y passed, Z% coverage]
-Secrets:  [OK/X found]
-Logs:     [OK/X console.logs]
-
-Ready for PR: [YES/NO]
-```
-
-If any critical issues, list them with fix suggestions.
-
-## Arguments
-
-$ARGUMENTS can be:
-- `quick` - Only build + types
-- `full` - All checks (default)
-- `pre-commit` - Checks relevant for commits
-- `pre-pr` - Full checks plus security scan
+Arguments: $ARGUMENTS

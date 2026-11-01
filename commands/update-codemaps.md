@@ -1,3 +1,7 @@
+---
+description: Update codemaps workflow reference.
+---
+
 # Update Codemaps
 
 Analyze the codebase structure and update architecture documentation:

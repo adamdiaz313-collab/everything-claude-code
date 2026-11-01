@@ -1,3 +1,7 @@
+---
+description: Update docs workflow reference.
+---
+
 # Update Documentation
 
 Sync documentation from source-of-truth:

@@ -1,3 +1,7 @@
+---
+description: Eval workflow reference.
+---
+
 # Eval Command
 
 Manage eval-driven development workflow.
