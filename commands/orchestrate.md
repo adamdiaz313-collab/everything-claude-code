@@ -1,3 +1,7 @@
+---
+description: Orchestrate workflow reference.
+---
+
 # Orchestrate Command
 
 Sequential agent workflow for complex tasks.

@@ -1,3 +1,7 @@
+---
+description: Test coverage workflow reference.
+---
+
 # Test Coverage
 
 Analyze test coverage and generate missing tests:

@@ -45,8 +45,8 @@ function latest(c) {
   const files = fs.readdirSync(c.dir).filter(f => /^checkpoint-\d+-[a-f0-9-]+\.json$/.test(f)).sort().reverse();
   for (const file of files) {
     const p = path.join(c.dir, file);
-    if (fs.statSync(p).size > 32000) continue;
     try {
+      if (!fs.lstatSync(p).isFile() || fs.statSync(p).size > 32000) continue;
       const value = JSON.parse(fs.readFileSync(p, 'utf8'));
       if (value.version !== 1 || value.root !== c.root || value.branch !== c.branch) continue;
       validate(value.notes);

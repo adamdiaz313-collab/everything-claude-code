@@ -9,5 +9,8 @@
       "source": "./",
       "description": "Project checkpoints and opt-in local hooks; reliability fork of Everything Claude Code"
     }
-  ]
+  ],
+  "metadata": {
+    "description": "Project checkpoints and opt-in local hooks for Claude Code."
+  }
 }

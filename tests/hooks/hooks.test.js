@@ -105,3 +105,11 @@ test('saving notes does not modify project files', () => {
  const before = fs.readdirSync(project).sort(); assert.equal(save().status,0);
  assert.deepEqual(fs.readdirSync(project).sort(),before);
 });
+
+test('checkpoint-shaped directory is skipped during restore', () => {
+ const { context } = require('../../scripts/lib/checkpoints');
+ const old = process.env.ECC_STATE_DIR; process.env.ECC_STATE_DIR = state;
+ const c = context(project); if (old === undefined) delete process.env.ECC_STATE_DIR; else process.env.ECC_STATE_DIR = old;
+ fs.mkdirSync(path.join(c.dir, 'checkpoint-9999999999999-bbbb.json'));
+ assert.deepEqual(show().notes, notes);
+});

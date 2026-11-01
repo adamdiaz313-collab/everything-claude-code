@@ -1,3 +1,8 @@
+---
+name: verification-loop
+description: Verification loop guidance for project workflows.
+---
+
 # Verification Loop Skill
 
 A comprehensive verification system for Claude Code sessions.

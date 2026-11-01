@@ -1,3 +1,7 @@
+---
+description: Learn workflow reference.
+---
+
 # /learn - Extract Reusable Patterns
 
 Analyze the current session and extract any patterns worth saving as skills.
