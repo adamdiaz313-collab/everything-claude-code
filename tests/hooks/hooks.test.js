@@ -64,7 +64,7 @@ test('formatter receives special filename as one literal argument', () => {
  const name = process.platform === 'win32' ? 'space & special.js' : 'space $(touch INJECTED) `touch INJECTED2` "quote.js';
  const file = path.join(project, name); fs.writeFileSync(file, 'let x=1');
  const result = hook('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } }, { ECC_FORMAT_ON_EDIT: '1' });
- assert.equal(result.status, 0); assert.deepEqual(JSON.parse(fs.readFileSync(path.join(project, 'received.json'))), ['--write', '--', file]);
+ assert.equal(result.status, 0); assert.deepEqual(JSON.parse(fs.readFileSync(path.join(project, 'received.json'))), ['--write', '--', fs.realpathSync(file)]);
  assert.equal(fs.existsSync(path.join(project, 'INJECTED')), false);
  assert.equal(fs.existsSync(path.join(project, 'INJECTED2')), false);
 });
