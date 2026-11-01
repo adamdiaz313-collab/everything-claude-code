@@ -1,40 +1,17 @@
-# Code Review
+---
+description: Review the actual diff for correctness, security and missing validation.
+---
+# Code review
 
-Comprehensive security and quality review of uncommitted changes:
+Read project instructions, Git status, staged and unstaged diffs, and relevant new untracked files.
+For branch review, establish the intended base explicitly. Do not assume HEAD captures all changes.
 
-1. Get changed files: git diff --name-only HEAD
+Prioritize concrete bugs, regressions, unsafe input handling, credential exposure, authorization
+errors and missing behavioral tests. Cite file locations, the trigger and the consequence.
+Distinguish verified defects from hypotheses. Follow project conventions; line counts, logging,
+mutation, emoji and missing JSDoc are not automatically high-severity bugs.
+Report verification performed and important limits. If no defects are found, say so without
+claiming the code is secure or fully tested. Do not merge, publish, or change files during review
+unless the user requested fixes as well.
 
-2. For each changed file, check for:
-
-**Security Issues (CRITICAL):**
-- Hardcoded credentials, API keys, tokens
-- SQL injection vulnerabilities
-- XSS vulnerabilities  
-- Missing input validation
-- Insecure dependencies
-- Path traversal risks
-
-**Code Quality (HIGH):**
-- Functions > 50 lines
-- Files > 800 lines
-- Nesting depth > 4 levels
-- Missing error handling
-- console.log statements
-- TODO/FIXME comments
-- Missing JSDoc for public APIs
-
-**Best Practices (MEDIUM):**
-- Mutation patterns (use immutable instead)
-- Emoji usage in code/comments
-- Missing tests for new code
-- Accessibility issues (a11y)
-
-3. Generate report with:
-   - Severity: CRITICAL, HIGH, MEDIUM, LOW
-   - File location and line numbers
-   - Issue description
-   - Suggested fix
-
-4. Block commit if CRITICAL or HIGH issues found
-
-Never approve code with security vulnerabilities!
+Arguments: $ARGUMENTS

@@ -1,316 +1,107 @@
-/**
- * Tests for hook scripts
- *
- * Run with: node tests/hooks/hooks.test.js
- */
-
-const assert = require('assert');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
-const { execSync, spawn } = require('child_process');
-
-// Test helper
-function test(name, fn) {
-  try {
-    fn();
-    console.log(`  ✓ ${name}`);
-    return true;
-  } catch (err) {
-    console.log(`  ✗ ${name}`);
-    console.log(`    Error: ${err.message}`);
-    return false;
-  }
+'use strict';
+const { test, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+const { spawnSync, execFileSync } = require('node:child_process');
+const root = path.resolve(__dirname, '../..');
+const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-integration-'));
+after(() => fs.rmSync(temp, { recursive: true, force: true }));
+const state = path.join(temp, 'state');
+const project = path.join(temp, 'project with spaces');
+const other = path.join(temp, 'other');
+fs.mkdirSync(project); fs.mkdirSync(other);
+const env = { ...process.env, ECC_STATE_DIR: state, ECC_FORMAT_ON_EDIT: '0', ECC_RESTRICT_DOCS: '0' };
+const notes = { task: 'Repair UI', decisions: 'Keep API', completed: 'Added fix', unfinished: 'Browser test', tests: 'Unit: 3 passed; browser: not run', nextSteps: 'Run browser tests' };
+function run(script, input, extra = {}, args = []) {
+ return spawnSync(process.execPath, [path.join(root, script), ...args], { input: typeof input === 'string' ? input : JSON.stringify(input), env: { ...env, ...extra }, encoding: 'utf8', timeout: 25000 });
 }
-
-// Async test helper
-async function asyncTest(name, fn) {
-  try {
-    await fn();
-    console.log(`  ✓ ${name}`);
-    return true;
-  } catch (err) {
-    console.log(`  ✗ ${name}`);
-    console.log(`    Error: ${err.message}`);
-    return false;
-  }
-}
-
-// Run a script and capture output
-function runScript(scriptPath, input = '', env = {}) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn('node', [scriptPath], {
-      env: { ...process.env, ...env },
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-
-    let stdout = '';
-    let stderr = '';
-
-    proc.stdout.on('data', data => stdout += data);
-    proc.stderr.on('data', data => stderr += data);
-
-    if (input) {
-      proc.stdin.write(input);
-    }
-    proc.stdin.end();
-
-    proc.on('close', code => {
-      resolve({ code, stdout, stderr });
-    });
-
-    proc.on('error', reject);
-  });
-}
-
-// Create a temporary test directory
-function createTestDir() {
-  const testDir = path.join(os.tmpdir(), `hooks-test-${Date.now()}`);
-  fs.mkdirSync(testDir, { recursive: true });
-  return testDir;
-}
-
-// Clean up test directory
-function cleanupTestDir(testDir) {
-  fs.rmSync(testDir, { recursive: true, force: true });
-}
-
-// Test suite
-async function runTests() {
-  console.log('\n=== Testing Hook Scripts ===\n');
-
-  let passed = 0;
-  let failed = 0;
-
-  const scriptsDir = path.join(__dirname, '..', '..', 'scripts', 'hooks');
-
-  // session-start.js tests
-  console.log('session-start.js:');
-
-  if (await asyncTest('runs without error', async () => {
-    const result = await runScript(path.join(scriptsDir, 'session-start.js'));
-    assert.strictEqual(result.code, 0, `Exit code should be 0, got ${result.code}`);
-  })) passed++; else failed++;
-
-  if (await asyncTest('outputs session info to stderr', async () => {
-    const result = await runScript(path.join(scriptsDir, 'session-start.js'));
-    assert.ok(
-      result.stderr.includes('[SessionStart]') ||
-      result.stderr.includes('Package manager'),
-      'Should output session info'
-    );
-  })) passed++; else failed++;
-
-  // session-end.js tests
-  console.log('\nsession-end.js:');
-
-  if (await asyncTest('runs without error', async () => {
-    const result = await runScript(path.join(scriptsDir, 'session-end.js'));
-    assert.strictEqual(result.code, 0, `Exit code should be 0, got ${result.code}`);
-  })) passed++; else failed++;
-
-  if (await asyncTest('creates or updates session file', async () => {
-    // Run the script
-    await runScript(path.join(scriptsDir, 'session-end.js'));
-
-    // Check if session file was created
-    const sessionsDir = path.join(os.homedir(), '.claude', 'sessions');
-    const today = new Date().toISOString().split('T')[0];
-    const sessionFile = path.join(sessionsDir, `${today}-session.tmp`);
-
-    assert.ok(fs.existsSync(sessionFile), 'Session file should exist');
-  })) passed++; else failed++;
-
-  // pre-compact.js tests
-  console.log('\npre-compact.js:');
-
-  if (await asyncTest('runs without error', async () => {
-    const result = await runScript(path.join(scriptsDir, 'pre-compact.js'));
-    assert.strictEqual(result.code, 0, `Exit code should be 0, got ${result.code}`);
-  })) passed++; else failed++;
-
-  if (await asyncTest('outputs PreCompact message', async () => {
-    const result = await runScript(path.join(scriptsDir, 'pre-compact.js'));
-    assert.ok(result.stderr.includes('[PreCompact]'), 'Should output PreCompact message');
-  })) passed++; else failed++;
-
-  if (await asyncTest('creates compaction log', async () => {
-    await runScript(path.join(scriptsDir, 'pre-compact.js'));
-    const logFile = path.join(os.homedir(), '.claude', 'sessions', 'compaction-log.txt');
-    assert.ok(fs.existsSync(logFile), 'Compaction log should exist');
-  })) passed++; else failed++;
-
-  // suggest-compact.js tests
-  console.log('\nsuggest-compact.js:');
-
-  if (await asyncTest('runs without error', async () => {
-    const result = await runScript(path.join(scriptsDir, 'suggest-compact.js'), '', {
-      CLAUDE_SESSION_ID: 'test-session-' + Date.now()
-    });
-    assert.strictEqual(result.code, 0, `Exit code should be 0, got ${result.code}`);
-  })) passed++; else failed++;
-
-  if (await asyncTest('increments counter on each call', async () => {
-    const sessionId = 'test-counter-' + Date.now();
-
-    // Run multiple times
-    for (let i = 0; i < 3; i++) {
-      await runScript(path.join(scriptsDir, 'suggest-compact.js'), '', {
-        CLAUDE_SESSION_ID: sessionId
-      });
-    }
-
-    // Check counter file
-    const counterFile = path.join(os.tmpdir(), `claude-tool-count-${sessionId}`);
-    const count = parseInt(fs.readFileSync(counterFile, 'utf8').trim(), 10);
-    assert.strictEqual(count, 3, `Counter should be 3, got ${count}`);
-
-    // Cleanup
-    fs.unlinkSync(counterFile);
-  })) passed++; else failed++;
-
-  if (await asyncTest('suggests compact at threshold', async () => {
-    const sessionId = 'test-threshold-' + Date.now();
-    const counterFile = path.join(os.tmpdir(), `claude-tool-count-${sessionId}`);
-
-    // Set counter to threshold - 1
-    fs.writeFileSync(counterFile, '49');
-
-    const result = await runScript(path.join(scriptsDir, 'suggest-compact.js'), '', {
-      CLAUDE_SESSION_ID: sessionId,
-      COMPACT_THRESHOLD: '50'
-    });
-
-    assert.ok(
-      result.stderr.includes('50 tool calls reached'),
-      'Should suggest compact at threshold'
-    );
-
-    // Cleanup
-    fs.unlinkSync(counterFile);
-  })) passed++; else failed++;
-
-  // evaluate-session.js tests
-  console.log('\nevaluate-session.js:');
-
-  if (await asyncTest('runs without error when no transcript', async () => {
-    const result = await runScript(path.join(scriptsDir, 'evaluate-session.js'));
-    assert.strictEqual(result.code, 0, `Exit code should be 0, got ${result.code}`);
-  })) passed++; else failed++;
-
-  if (await asyncTest('skips short sessions', async () => {
-    const testDir = createTestDir();
-    const transcriptPath = path.join(testDir, 'transcript.jsonl');
-
-    // Create a short transcript (less than 10 user messages)
-    const transcript = Array(5).fill('{"type":"user","content":"test"}\n').join('');
-    fs.writeFileSync(transcriptPath, transcript);
-
-    const result = await runScript(path.join(scriptsDir, 'evaluate-session.js'), '', {
-      CLAUDE_TRANSCRIPT_PATH: transcriptPath
-    });
-
-    assert.ok(
-      result.stderr.includes('Session too short'),
-      'Should indicate session is too short'
-    );
-
-    cleanupTestDir(testDir);
-  })) passed++; else failed++;
-
-  if (await asyncTest('processes sessions with enough messages', async () => {
-    const testDir = createTestDir();
-    const transcriptPath = path.join(testDir, 'transcript.jsonl');
-
-    // Create a longer transcript (more than 10 user messages)
-    const transcript = Array(15).fill('{"type":"user","content":"test"}\n').join('');
-    fs.writeFileSync(transcriptPath, transcript);
-
-    const result = await runScript(path.join(scriptsDir, 'evaluate-session.js'), '', {
-      CLAUDE_TRANSCRIPT_PATH: transcriptPath
-    });
-
-    assert.ok(
-      result.stderr.includes('15 messages'),
-      'Should report message count'
-    );
-
-    cleanupTestDir(testDir);
-  })) passed++; else failed++;
-
-  // hooks.json validation
-  console.log('\nhooks.json Validation:');
-
-  if (test('hooks.json is valid JSON', () => {
-    const hooksPath = path.join(__dirname, '..', '..', 'hooks', 'hooks.json');
-    const content = fs.readFileSync(hooksPath, 'utf8');
-    JSON.parse(content); // Will throw if invalid
-  })) passed++; else failed++;
-
-  if (test('hooks.json has required event types', () => {
-    const hooksPath = path.join(__dirname, '..', '..', 'hooks', 'hooks.json');
-    const hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
-
-    assert.ok(hooks.hooks.PreToolUse, 'Should have PreToolUse hooks');
-    assert.ok(hooks.hooks.PostToolUse, 'Should have PostToolUse hooks');
-    assert.ok(hooks.hooks.SessionStart, 'Should have SessionStart hooks');
-    assert.ok(hooks.hooks.Stop, 'Should have Stop hooks');
-    assert.ok(hooks.hooks.PreCompact, 'Should have PreCompact hooks');
-  })) passed++; else failed++;
-
-  if (test('all hook commands use node', () => {
-    const hooksPath = path.join(__dirname, '..', '..', 'hooks', 'hooks.json');
-    const hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
-
-    const checkHooks = (hookArray) => {
-      for (const entry of hookArray) {
-        for (const hook of entry.hooks) {
-          if (hook.type === 'command') {
-            assert.ok(
-              hook.command.startsWith('node'),
-              `Hook command should start with 'node': ${hook.command.substring(0, 50)}...`
-            );
-          }
-        }
-      }
-    };
-
-    for (const [eventType, hookArray] of Object.entries(hooks.hooks)) {
-      checkHooks(hookArray);
-    }
-  })) passed++; else failed++;
-
-  if (test('script references use CLAUDE_PLUGIN_ROOT variable', () => {
-    const hooksPath = path.join(__dirname, '..', '..', 'hooks', 'hooks.json');
-    const hooks = JSON.parse(fs.readFileSync(hooksPath, 'utf8'));
-
-    const checkHooks = (hookArray) => {
-      for (const entry of hookArray) {
-        for (const hook of entry.hooks) {
-          if (hook.type === 'command' && hook.command.includes('scripts/hooks/')) {
-            // Check for the literal string "${CLAUDE_PLUGIN_ROOT}" in the command
-            const hasPluginRoot = hook.command.includes('${CLAUDE_PLUGIN_ROOT}');
-            assert.ok(
-              hasPluginRoot,
-              `Script paths should use CLAUDE_PLUGIN_ROOT: ${hook.command.substring(0, 80)}...`
-            );
-          }
-        }
-      }
-    };
-
-    for (const [eventType, hookArray] of Object.entries(hooks.hooks)) {
-      checkHooks(hookArray);
-    }
-  })) passed++; else failed++;
-
-  // Summary
-  console.log('\n=== Test Results ===');
-  console.log(`Passed: ${passed}`);
-  console.log(`Failed: ${failed}`);
-  console.log(`Total:  ${passed + failed}\n`);
-
-  process.exit(failed > 0 ? 1 : 0);
-}
-
-runTests();
+function hook(event, data = {}, extra = {}) { return run('scripts/hooks/runtime.js', { cwd: project, session_id: 'session-one', hook_event_name: event, ...data }, extra); }
+function save(cwd = project, value = notes) { return run('scripts/checkpoint.js', value, {}, ['save', cwd]); }
+function show(cwd = project) { return JSON.parse(run('scripts/checkpoint.js', '', {}, ['show', cwd]).stdout); }
+test('manifest dispatches real tool names to existing scripts', () => {
+ const hooks = JSON.parse(fs.readFileSync(path.join(root, 'hooks/hooks.json'))).hooks;
+ for (const [event, entries] of Object.entries(hooks)) for (const entry of entries) {
+  assert.ok(!entry.matcher.includes('tool =='));
+  for (const h of entry.hooks) assert.equal(h.command, 'node "${CLAUDE_PLUGIN_ROOT}/scripts/hooks/runtime.js"');
+  if (event === 'PostToolUse') { assert.match('Edit', new RegExp(entry.matcher)); assert.match('Write', new RegExp(entry.matcher)); assert.doesNotMatch('Bash', new RegExp(entry.matcher)); }
+ }
+});
+test('save and restore explicit notes via SessionStart stdout', () => {
+ assert.equal(save().status, 0);
+ const result = hook('SessionStart'); assert.equal(result.status, 0);
+ const output = JSON.parse(result.stdout).hookSpecificOutput;
+ assert.equal(output.hookEventName, 'SessionStart'); assert.ok(output.additionalContext.includes(notes.nextSteps));
+ assert.deepEqual(show().notes, notes);
+});
+test('other projects do not load these notes', () => { assert.equal(show(other), null); assert.equal(hook('SessionStart', { cwd: other }).stdout, ''); });
+test('end and compact record metadata without overwriting summary', () => {
+ assert.equal(hook('PreCompact').status, 0); assert.equal(hook('SessionEnd').status, 0);
+ assert.deepEqual(show().notes, notes);
+});
+test('invalid checkpoint rejected without losing saved data', () => {
+ assert.equal(save(project, { task: 'incomplete' }).status, 1); assert.deepEqual(show().notes, notes);
+});
+test('large checkpoint rejected', () => { assert.equal(save(project, { ...notes, task: 'x'.repeat(17000) }).status, 1); });
+test('malformed hook input reports error', () => { assert.equal(run('scripts/hooks/runtime.js', '{').status, 1); });
+test('missing cwd does not write into arbitrary directory', () => { assert.equal(run('scripts/hooks/runtime.js', {}).status, 1); });
+test('normal documents allowed by default', () => { assert.equal(hook('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/design.md' } }).status, 0); });
+test('optional document policy blocks with exit 2 and allows README', () => {
+ const opt = { ECC_RESTRICT_DOCS: '1' };
+ assert.equal(hook('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'docs/design.md' } }, opt).status, 2);
+ assert.equal(hook('PreToolUse', { tool_name: 'Write', tool_input: { file_path: 'README.md' } }, opt).status, 0);
+});
+test('missing local formatter reports skip; no download', () => {
+ const file = path.join(other, 'x.js'); fs.writeFileSync(file, 'let x=1');
+ const result = hook('PostToolUse', { cwd: other, tool_name: 'Edit', tool_input: { file_path: file } }, { ECC_FORMAT_ON_EDIT: '1' });
+ assert.equal(result.status, 0); assert.ok(result.stdout.includes('install and lock Prettier')); assert.equal(fs.readFileSync(file, 'utf8'), 'let x=1');
+});
+test('formatter receives special filename as one literal argument', () => {
+ const pkg = path.join(project, 'node_modules/prettier'); fs.mkdirSync(pkg, { recursive: true });
+ fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'prettier', bin: './cli.js' }));
+ fs.writeFileSync(path.join(pkg, 'cli.js'), "require('fs').writeFileSync('received.json', JSON.stringify(process.argv.slice(2)))");
+ const name = process.platform === 'win32' ? 'space & special.js' : 'space $(touch INJECTED) `touch INJECTED2` "quote.js';
+ const file = path.join(project, name); fs.writeFileSync(file, 'let x=1');
+ const result = hook('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } }, { ECC_FORMAT_ON_EDIT: '1' });
+ assert.equal(result.status, 0); assert.deepEqual(JSON.parse(fs.readFileSync(path.join(project, 'received.json'))), ['--write', '--', file]);
+ assert.equal(fs.existsSync(path.join(project, 'INJECTED')), false);
+ assert.equal(fs.existsSync(path.join(project, 'INJECTED2')), false);
+});
+test('formatter cannot edit outside project', () => {
+ const file = path.join(other, 'outside.js'); fs.writeFileSync(file, 'x');
+ assert.equal(hook('PostToolUse', { tool_name: 'Edit', tool_input: { file_path: file } }, { ECC_FORMAT_ON_EDIT: '1' }).status, 1);
+});
+test('corrupt latest checkpoint falls back to last valid notes', () => {
+ const { context } = require('../../scripts/lib/checkpoints');
+ const old = process.env.ECC_STATE_DIR; process.env.ECC_STATE_DIR = state;
+ const c = context(project); if (old === undefined) delete process.env.ECC_STATE_DIR; else process.env.ECC_STATE_DIR = old;
+ fs.writeFileSync(path.join(c.dir, 'checkpoint-9999999999999-aaaa.json'), '{'); assert.deepEqual(show().notes, notes);
+});
+test('sessions cannot escape storage with hostile IDs', () => {
+ assert.equal(hook('SessionEnd', { session_id: '../../escape' }).status, 0); assert.equal(fs.existsSync(path.join(temp, 'escape.json')), false);
+});
+test('branch checkpoints remain separate including nested directories', () => {
+ const repo = path.join(temp, 'git-project'); fs.mkdirSync(repo);
+ const git = args => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
+ git(['init', '-b', 'main']); git(['-c','user.name=Test','-c','user.email=test@example.invalid','commit','--allow-empty','-m','Initial']);
+ assert.equal(save(repo).status, 0); git(['checkout','-b','feature']); assert.equal(show(repo), null);
+ save(repo, { ...notes, task: 'Feature work' }); git(['checkout','main']);
+ const sub = path.join(repo,'sub'); fs.mkdirSync(sub); assert.equal(show(sub).notes.task, notes.task);
+});
+test('formatting is disabled by default even when local formatter exists', () => {
+ const output = path.join(project,'received.json'); fs.rmSync(output, {force:true});
+ const file = path.join(project,'disabled.js'); fs.writeFileSync(file,'x');
+ assert.equal(hook('PostToolUse',{tool_name:'Write',tool_input:{file_path:file}}).status,0);
+ assert.equal(fs.existsSync(output),false);
+});
+test('formatter failure is surfaced as context without claiming success', () => {
+ fs.writeFileSync(path.join(project,'node_modules/prettier/cli.js'),'process.exit(3)');
+ const file = path.join(project,'disabled.js');
+ const result = hook('PostToolUse',{tool_name:'Edit',tool_input:{file_path:file}},{ECC_FORMAT_ON_EDIT:'1'});
+ assert.equal(result.status,0); assert.ok(result.stdout.includes('failed or timed out'));
+});
+test('saving notes does not modify project files', () => {
+ const before = fs.readdirSync(project).sort(); assert.equal(save().status,0);
+ assert.deepEqual(fs.readdirSync(project).sort(),before);
+});

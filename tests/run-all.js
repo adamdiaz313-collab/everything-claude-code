@@ -1,76 +1,24 @@
 #!/usr/bin/env node
-/**
- * Run all tests
- *
- * Usage: node tests/run-all.js
- */
-
-const { execSync } = require('child_process');
-const path = require('path');
-const fs = require('fs');
-
-const testsDir = __dirname;
-const testFiles = [
-  'lib/utils.test.js',
-  'lib/package-manager.test.js',
-  'hooks/hooks.test.js'
-];
-
-console.log('╔══════════════════════════════════════════════════════════╗');
-console.log('║           Everything Claude Code - Test Suite            ║');
-console.log('╚══════════════════════════════════════════════════════════╝');
-console.log();
-
-let totalPassed = 0;
-let totalFailed = 0;
-let totalTests = 0;
-
-for (const testFile of testFiles) {
-  const testPath = path.join(testsDir, testFile);
-
-  if (!fs.existsSync(testPath)) {
-    console.log(`⚠ Skipping ${testFile} (file not found)`);
-    continue;
-  }
-
-  console.log(`\n━━━ Running ${testFile} ━━━`);
-
+'use strict';
+const { spawnSync } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
+function runSuite(files, dir = __dirname) {
+  let failed = 0;
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ecc-test-home-'));
   try {
-    const output = execSync(`node "${testPath}"`, {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    });
-    console.log(output);
-
-    // Parse results from output
-    const passedMatch = output.match(/Passed:\s*(\d+)/);
-    const failedMatch = output.match(/Failed:\s*(\d+)/);
-
-    if (passedMatch) totalPassed += parseInt(passedMatch[1], 10);
-    if (failedMatch) totalFailed += parseInt(failedMatch[1], 10);
-
-  } catch (err) {
-    console.log(err.stdout || '');
-    console.log(err.stderr || '');
-
-    // Parse results even on failure
-    const output = (err.stdout || '') + (err.stderr || '');
-    const passedMatch = output.match(/Passed:\s*(\d+)/);
-    const failedMatch = output.match(/Failed:\s*(\d+)/);
-
-    if (passedMatch) totalPassed += parseInt(passedMatch[1], 10);
-    if (failedMatch) totalFailed += parseInt(failedMatch[1], 10);
-  }
+    for (const file of files) {
+      const target = path.join(dir, file);
+      if (!fs.existsSync(target)) { console.error(`Missing suite: ${file}`); failed++; continue; }
+      const args = ['--require', path.join(__dirname, 'isolated-home.cjs')];
+      if (file === 'hooks/hooks.test.js') args.push('--test');
+      const result = spawnSync(process.execPath, [...args, target], { encoding: 'utf8', env: { ...process.env, ECC_TEST_HOME: home }, timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+      console.log(result.stdout || ''); console.error(result.stderr || '');
+      if (result.error || result.status !== 0) { failed++; console.error(`Failed suite: ${file}`); }
+    }
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+  return failed;
 }
-
-totalTests = totalPassed + totalFailed;
-
-console.log('\n╔══════════════════════════════════════════════════════════╗');
-console.log('║                     Final Results                        ║');
-console.log('╠══════════════════════════════════════════════════════════╣');
-console.log(`║  Total Tests: ${String(totalTests).padStart(4)}                                      ║`);
-console.log(`║  Passed:      ${String(totalPassed).padStart(4)}  ✓                                   ║`);
-console.log(`║  Failed:      ${String(totalFailed).padStart(4)}  ${totalFailed > 0 ? '✗' : ' '}                                   ║`);
-console.log('╚══════════════════════════════════════════════════════════╝');
-
-process.exit(totalFailed > 0 ? 1 : 0);
+if (require.main === module) process.exitCode = runSuite(['lib/utils.test.js', 'lib/package-manager.test.js', 'hooks/hooks.test.js', 'runner.test.js']) ? 1 : 0;
+module.exports = { runSuite };
